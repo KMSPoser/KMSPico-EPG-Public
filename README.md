@@ -70,6 +70,25 @@ The missing Devils/Vegas game remains **unresolved**: the fact that an IPTV
 stream played that game on a channel named CW 8 Missoula does not establish
 its future broadcast schedule or channel identity.
 
+### Private catalog audit (v0.3 candidate)
+
+`catalog_audit.py` helps diagnose the actual playlist without modifying it:
+
+```bash
+python3 catalog_audit.py --playlist /private/path/main.m3u --catalog /private/path/live_streams.json
+```
+
+It compares exact **stream IDs** to provider catalog entries, preserves Main's
+`tvg-id` values, and flags rotating `NHL Event` slots. The tool retains no
+stream URLs or passwords and never publishes its diagnostic results. Its
+optional `--nhl-schedule /private/path/schedule.json --nhl-day YYYY-MM-DD`
+argument can cross-check provider game labels against an NHL schedule snapshot.
+
+A matching NHL game and time **does not prove the IPTV stream is carrying that
+game**. All candidate entries remain `publishable_as_epg: false` until the
+actual stream and programme can be verified separately. Never commit the
+private input files or candidate output to this public repository.
+
 ## Publish for free
 
 1. Create a **public** GitHub repository with these files.
