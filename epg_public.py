@@ -12,8 +12,10 @@ import json
 import os
 from pathlib import Path
 import tempfile
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlparse
 import xml.etree.ElementTree as ET
+
+from tvmaze_source import load_tvmaze_events
 
 
 def parse_utc(value: str) -> datetime:
@@ -39,8 +41,15 @@ def validated_events(config: dict, now: datetime) -> list[dict]:
         if not isinstance(event, dict) or any(not isinstance(event.get(k), str) or not event[k].strip() for k in required):
             raise ValueError("Every event must contain non-empty string fields")
         uri = urlparse(event["verified_source_url"])
-        if uri.scheme != "https" or not uri.hostname or uri.username or uri.password:
+        secret_keys = {"username", "password", "token", "access_token", "key", "api_key", "auth", "user", "pass", "sig"}
+        if (uri.scheme != "https" or not uri.hostname or uri.username or uri.password
+                or any(key.lower() in secret_keys for key, _ in parse_qsl(uri.query, keep_blank_values=True))
+                or uri.path.lower().endswith((".m3u", ".m3u8", ".ts"))):
             raise ValueError("A public, credential-free HTTPS verification URL is required")
+        if event.get("source", "operator") not in ("operator", "tvmaze"):
+            raise ValueError("Unknown event provenance")
+        if event.get("source") == "tvmaze" and uri.hostname != "www.tvmaze.com":
+            raise ValueError("TVmaze events require a TVmaze episode source")
         start, stop = parse_utc(event["start_utc"]), parse_utc(event["stop_utc"])
         if stop <= start or stop - start > timedelta(hours=12):
             raise ValueError("Event duration must be positive and at most 12 hours")
@@ -79,7 +88,9 @@ def make_guide(events: list[dict]) -> ET.Element:
             "stop": xmltv_time(event["stop"]),
         })
         ET.SubElement(programme, "title", {"lang": "en"}).text = event["title"]
-        ET.SubElement(programme, "desc", {"lang": "en"}).text = "Operator-verified schedule entry"
+        description = ("Schedule data: TVmaze (CC BY-SA 4.0); broadcaster identity operator-confirmed"
+                       if event.get("source") == "tvmaze" else "Operator-verified schedule entry")
+        ET.SubElement(programme, "desc", {"lang": "en"}).text = description
     return root
 
 
@@ -96,8 +107,12 @@ def atomic_write(path: Path, payload: bytes) -> None:
             temporary.unlink()
 
 
-def build(config_path: Path, output_dir: Path, now: datetime) -> dict:
+def build(config_path: Path, output_dir: Path, now: datetime, tvmaze_config: Path | None = None) -> dict:
     config = json.loads(config_path.read_text(encoding="utf-8"))
+    if tvmaze_config is not None:
+        if config.get("version") != 1 or not isinstance(config.get("events"), list):
+            raise ValueError("Unsupported event configuration")
+        config["events"].extend(load_tvmaze_events(tvmaze_config, now))
     events = validated_events(config, now)
     root = make_guide(events)
     xml = ET.tostring(root, encoding="utf-8", xml_declaration=True)
@@ -107,6 +122,7 @@ def build(config_path: Path, output_dir: Path, now: datetime) -> dict:
         "kind": "verified-supplement-only",
         "channels": len({e["channel_id"] for e in events}),
         "programmes": len(events),
+        "tvmaze_programmes": sum(e.get("source") == "tvmaze" for e in events),
         "note": "Not a replacement for the original online EPG",
     }
     atomic_write(output_dir / "guide.xml", xml)
@@ -118,8 +134,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=Path("config/verified_events.json"))
     parser.add_argument("--out", type=Path, default=Path("docs"))
+    parser.add_argument("--tvmaze-config", type=Path, default=Path("config/tvmaze_channels.json"))
     args = parser.parse_args()
-    report = build(args.config, args.out, datetime.now(timezone.utc))
+    report = build(args.config, args.out, datetime.now(timezone.utc), args.tvmaze_config)
     print(f"Supplement EPG: {report['channels']} channels, {report['programmes']} programmes")
 
 
