@@ -118,6 +118,65 @@ class NativeEPGOverlayTest(unittest.TestCase):
             self.assertEqual(report["selection_counts"]["source_schedule_conflict"], 1)
             self.assertEqual(len(tree.getroot()), 0)
 
+    def test_partially_overlapping_different_titles_are_excluded(self):
+        programmes = [
+            '<programme channel="native.id" start="20261102000000 +0000" '
+            'stop="20261102160000 +0000"><title>News</title></programme>',
+            '<programme channel="native.id" start="20261102150000 +0000" '
+            'stop="20261103000000 +0000"><title>Sports</title></programme>',
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            base, native = self._fixtures(Path(directory), programmes=programmes)
+            tree, report = build_candidate(*self._data(), baseline=base, eagle=native, now=NOW)
+            self.assertEqual(report["candidate_channels"], 0)
+            self.assertEqual(report["selection_counts"]["source_schedule_overlap"], 1)
+            self.assertEqual(report["source_checks"]["partial_overlap_intervals"], 1)
+            self.assertEqual(report["source_checks"]["source_ids_with_partial_overlaps"], 1)
+            self.assertFalse(report["approved_for_public_guide"])
+            self.assertEqual(len(tree.getroot()), 0)
+
+    def test_same_title_time_shift_is_also_withheld(self):
+        programmes = [
+            '<programme channel="native.id" start="20261102000000 +0000" '
+            'stop="20261102160000 +0000"><title>News</title></programme>',
+            '<programme channel="native.id" start="20261102150000 +0000" '
+            'stop="20261103000000 +0000"><title>News</title></programme>',
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            base, native = self._fixtures(Path(directory), programmes=programmes)
+            _, report = build_candidate(*self._data(), baseline=base, eagle=native, now=NOW)
+            self.assertEqual(report["candidate_channels"], 0)
+            self.assertEqual(report["selection_counts"]["source_schedule_overlap"], 1)
+
+    def test_adjacent_nonoverlapping_programmes_stay_candidates(self):
+        programmes = [
+            '<programme channel="native.id" start="20261102000000 +0000" '
+            'stop="20261102120000 +0000"><title>Morning</title></programme>',
+            '<programme channel="native.id" start="20261102120000 +0000" '
+            'stop="20261103000000 +0000"><title>Evening</title></programme>',
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            base, native = self._fixtures(Path(directory), programmes=programmes)
+            tree, report = build_candidate(*self._data(), baseline=base, eagle=native, now=NOW)
+            self.assertEqual(report["candidate_channels"], 1)
+            self.assertEqual(report["candidate_programmes"], 2)
+            self.assertEqual(report["source_checks"]["source_ids_with_partial_overlaps"], 0)
+            self.assertEqual(len(tree.getroot().findall("programme")), 2)
+
+    def test_nested_intervals_detected_without_quadratic_comparison(self):
+        programmes = [
+            f'<programme channel="native.id" {ONE_DAY}><title>Full day</title></programme>',
+            '<programme channel="native.id" start="20261102010000 +0000" '
+            'stop="20261102020000 +0000"><title>Short A</title></programme>',
+            '<programme channel="native.id" start="20261102030000 +0000" '
+            'stop="20261102040000 +0000"><title>Short B</title></programme>',
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            base, native = self._fixtures(Path(directory), programmes=programmes)
+            _, report = build_candidate(*self._data(), baseline=base, eagle=native, now=NOW)
+            self.assertEqual(report["candidate_channels"], 0)
+            self.assertEqual(report["source_checks"]["partial_overlap_intervals"], 2)
+
     def test_invalid_or_short_source_schedule_not_exported(self):
         programmes = [
             '<programme channel="native.id" start="bad" stop="bad">'
