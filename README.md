@@ -374,6 +374,29 @@ For reliable auto-updating coverage, compare newly acquired native guide
 snapshots over time and confirm their permitted use and actual stream identity.
 This diagnostic never writes a guide, touches playlists, or approves EPG use.
 
+### Compare successive private Eagle guide snapshots (v1.6 local candidate)
+
+After taking a new Eagle XMLTV snapshot through an authorized account, compare
+it with the previous **private** snapshot at the **same fixed UTC instant**:
+
+```bash
+python3 schedule_refresh_audit.py --playlist /private/path/main.m3u \
+  --catalog /private/path/live_streams.json \
+  --baseline /private/path/epg41.xml.gz \
+  --old-native /private/path/eagle_old.xml \
+  --fresh-native /private/path/eagle_fresh.xml \
+  --as-of 2026-11-02T23:45:00Z
+```
+
+The read-only output shows strict candidate-channel and programme-count changes
+for each 6–48-hour window, aggregate rejection-count changes, and whether both
+files are byte-identical. It never prints source paths, channel identities,
+programme titles, credentials or stream URLs. An increased 24-hour candidate
+count can indicate replenishment, but **does not** prove that the provider's
+refresh cadence is reliable, that the programmes are correct, or that reuse is
+permitted. Do not publish either source snapshot or change `epg41.xml.gz` or
+TiviMate Favorites based on this diagnostic alone.
+
 ## Publish for free
 
 1. Create a **public** GitHub repository with these files.
