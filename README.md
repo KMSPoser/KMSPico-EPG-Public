@@ -333,6 +333,23 @@ No classification authorizes automatically picking a winning title: even a
 formatting-only difference must not be used as broadcaster identity proof.
 Continue to omit genuinely conflicting sources from any proposed guide.
 
+### Reject partial schedule overlaps as well (v1.4 local candidate)
+
+The private overlay now checks for **partially overlapping programme times**
+within each candidate source ID, in addition to same-start/same-stop title
+conflicts. Two distinct entries occupying the same instant may represent
+different channel feeds or an incorrectly shifted schedule. Even if both
+titles are identical, the tool does not pick which interval is authoritative.
+It withholds the entire source ID from the candidate XMLTV and reports only
+aggregate `partial_overlap_intervals`, `source_ids_with_partial_overlaps` and
+`source_schedule_overlap` counts. Adjacent programmes whose boundaries touch
+are allowed, and exactly duplicated entries are still deduplicated.
+
+Run the same v1.2 `native_epg_overlay.py` command above. This extra gate can
+reduce the candidate channel count; it never approves an EPG, publishes source
+programme data or changes a TiviMate playlist or Favorites. Source schedules,
+stream identity, and rights must still be verified separately before use.
+
 ## Publish for free
 
 1. Create a **public** GitHub repository with these files.

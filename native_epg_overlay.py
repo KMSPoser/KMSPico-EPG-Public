@@ -73,7 +73,7 @@ def _copy_programme(source: ET.Element) -> ET.Element:
 
 def scan_schedules(path: Path, wanted_ids: set[str], *,
                    begin: datetime, end: datetime) -> tuple[dict, Counter]:
-    """Parse only requested programme slots; reject contradictory exact slots."""
+    """Parse requested slots; flag contradictory and partially overlapping times."""
     opener = gzip.open if path.name.lower().endswith(".gz") else open
     slots: dict[str, dict[tuple[datetime, datetime], tuple[str, ET.Element]]] = defaultdict(dict)
     declarations: Counter[str] = Counter()
@@ -118,11 +118,25 @@ def scan_schedules(path: Path, wanted_ids: set[str], *,
                             else:
                                 slots[channel_id][key] = (title, _copy_programme(elem))
                 root.clear()
+    # Two distinct programmes covering the same instant leave no unambiguous
+    # guide entry to select. Even an overlapping same-title pair may be a
+    # shifted duplicate, so report it and withhold the whole source ID.
+    overlapping: set[str] = set()
+    for source_id, programmes in slots.items():
+        latest_stop = None
+        for start, stop in sorted(programmes):
+            if latest_stop is not None and start < latest_stop:
+                overlapping.add(source_id)
+                stats["partial_overlap_intervals"] += 1
+            if latest_stop is None or stop > latest_stop:
+                latest_stop = stop
+    stats["source_ids_with_partial_overlaps"] = len(overlapping)
     stats["source_duplicate_channel_ids"] = sum(n > 1 for n in declarations.values())
     return {
         "declared": set(declarations),
         "slots": slots,
         "contradictory": contradictory,
+        "overlapping": overlapping,
     }, stats
 
 
@@ -153,6 +167,9 @@ def build_candidate(playlist: list[dict], catalog: dict[str, dict], *,
             continue
         if source_id in native["contradictory"]:
             result_stats["source_schedule_conflict"] += 1
+            continue
+        if source_id in native["overlapping"]:
+            result_stats["source_schedule_overlap"] += 1
             continue
         programmes = native["slots"].get(source_id, {})
         intervals = [(max(begin, start), min(end, stop))
@@ -188,7 +205,7 @@ def build_candidate(playlist: list[dict], catalog: dict[str, dict], *,
         "selection_counts": {
             key: result_stats[key] for key in (
                 "source_id_missing", "source_schedule_conflict",
-                "under_95pct_coverage")
+                "source_schedule_overlap", "under_95pct_coverage")
         },
         "stream_identity_verified": False,
         "redistribution_rights_verified": False,
