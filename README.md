@@ -206,6 +206,31 @@ intended use. A staged pilot must validate real broadcast accuracy and guide
 refreshes; TiviMate settings should be backed up beforehand. **Keep `epg41`
 active until the independent Eagle guide passes those checks.**
 
+### Measure real pilot schedule gaps (v0.9 candidate)
+
+Even a correctly identified source network might have only a few scheduled
+episodes in TVmaze. To quantify that limitation before anybody changes a
+TiviMate guide assignment, run the private, read-only pilot audit:
+
+```bash
+python3 pilot_schedule_audit.py --playlist /private/path/main.m3u \
+  --catalog /private/path/live_streams.json --window-hours 48
+```
+
+It fetches daily public TVmaze schedules, sending **only dates** to the API.
+It screens the same ten low-ambiguity pilot channels, clips available episode
+intervals to a 48-hour window, and reports percent of that window covered plus
+the longest missing interval. Overlapping and repeated episodes are counted
+only once. It never emits stream URLs, stream IDs, credentials, programme
+titles, or a public guide, and it never changes or uploads Main. Keep the JSON
+output private; it includes local channel IDs and is not a publication approval.
+
+Every candidate's `actual_stream_verified` and `approved_for_public_guide`
+remain false regardless of schedule coverage. A TVmaze schedule may identify
+a network and some new episodes, but **it cannot certify an IPTV stream or fill
+all repeats, movies, news, and sports**. For that reason, this source is useful
+for a restricted supplement, not on its own a replacement for `epg41`.
+
 ## Publish for free
 
 1. Create a **public** GitHub repository with these files.
