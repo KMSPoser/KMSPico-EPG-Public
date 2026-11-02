@@ -157,6 +157,55 @@ doing so could disrupt existing EPG assignments and Favorites. Keep the
 original EPG source and verify any new source and individual guide assignment
 in TiviMate before deciding whether to use it.
 
+### Check whether matching IDs actually have current programmes (v0.7 candidate)
+
+The lightweight compatibility scan examines only channel declarations. To
+determine whether the *potentially matching* channels have usable future
+schedule data, run the optional, slower full-guide audit locally:
+
+```bash
+python3 guide_coverage.py --playlist /private/path/main.m3u --guide /private/path/candidate.xml.gz --hours 48
+```
+
+It counts upcoming programme intervals for exact ID matches and uniquely
+case-only matching candidates, including the number with at least 24 hours of
+coverage. It never prints programme titles or live stream URLs. Every case-only
+match still requires individual manual EPG assignment and live broadcaster
+verification; a full schedule does **not** prove a stream's identity.
+
+Large XMLTV files can take time and memory to parse. An externally obtained
+source's programmes are examined *privately*, not copied into this public
+feed. The tool does not grant permission to redistribute them or make an EPG
+source a safe replacement for the existing provider guide.
+
+### Build a private Eagle-specific replacement inventory (v0.8 candidate)
+
+The long-term objective is an independently maintained Eagle-compatible XMLTV
+feed that can eventually replace the old `epg41.xml.gz` source. The first step
+is to record **every** Main channel in an auditable private registry while
+preserving its name, group, original `tvg-id`, and playlist position:
+
+```bash
+python3 eagle_registry.py --playlist /private/path/main.m3u \
+  --baseline-guide /private/path/epg41.xml.gz \
+  --output /private/path/Eagle_Channel_Registry.json
+```
+
+This compares guide **ID declarations only**; it does not copy third-party
+programme listings. The saved JSON contains no stream URLs, stream IDs, or
+credentials and must **never be committed** to the public repository. The
+command refuses to write a registry inside this repository. It marks all
+network identities as `unverified` and all source mappings as `not_assigned`.
+Repeated real `tvg-id` values and placeholder event slots are flagged for
+separate review, never renamed automatically.
+
+Replacement cannot be declared ready merely because the candidate XMLTV has
+matching IDs and fresh time slots. Each proposed network must be checked
+against the actual live channel, and each programme source must authorize the
+intended use. A staged pilot must validate real broadcast accuracy and guide
+refreshes; TiviMate settings should be backed up beforehand. **Keep `epg41`
+active until the independent Eagle guide passes those checks.**
+
 ## Publish for free
 
 1. Create a **public** GitHub repository with these files.
