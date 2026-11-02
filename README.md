@@ -231,6 +231,34 @@ a network and some new episodes, but **it cannot certify an IPTV stream or fill
 all repeats, movies, news, and sports**. For that reason, this source is useful
 for a restricted supplement, not on its own a replacement for `epg41`.
 
+### Compare multiple independently obtained guides (v1.0 candidate)
+
+To identify which possible XMLTV sources deserve further research, compare
+**local copies** of several guides against Main's unchanged `tvg-id` values:
+
+```bash
+python3 source_comparison.py --playlist /private/path/main.m3u \
+  --candidate first=/private/path/first.xml.gz \
+  --candidate second=/private/path/second.xml --hours 48 \
+  > /private/path/source_comparison.json
+```
+
+This read-only comparison measures each declared channel's **exact** ID match,
+future programme count, percentage of the selected window covered, and longest
+missing interval. It separately flags case-only or ambiguous IDs, repeated
+Main channel IDs, and malformed programme timestamps. A 95% coverage figure is
+just a diagnostic threshold, **not** a publication or replacement approval.
+The JSON output is **private**: it contains Main's existing channel IDs and
+must not be committed to the public repository.
+
+The audit never fetches or redistributes any source listings, stores programme
+titles, changes a playlist, or assigns an EPG in TiviMate. Its source labels
+contain no addresses or credentials. Identical channel IDs and full schedule
+coverage are **not** proof of what the live Eagle stream actually shows.
+For each candidate, independently check the actual stream identity and its
+source's redistribution rights **before** proposing any public XMLTV entries.
+All approvals remain false in this report, and `epg41` remains the active guide.
+
 ## Publish for free
 
 1. Create a **public** GitHub repository with these files.
