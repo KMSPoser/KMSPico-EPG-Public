@@ -259,6 +259,80 @@ For each candidate, independently check the actual stream identity and its
 source's redistribution rights **before** proposing any public XMLTV entries.
 All approvals remain false in this report, and `epg41` remains the active guide.
 
+### Find conservative name-based crosswalk hints (v1.1 local candidate)
+
+Some IPTV providers use their own `tvg-id` values, which can result in zero
+exact matches against an otherwise relevant guide. This separate offline audit
+checks whether the provider's **existing channel names** have a *single* XMLTV
+`display-name` match, using only case/spacing/punctuation normalization, then
+optionally ignoring trailing quality labels such as `HD`, `FHD`, or `4K`:
+
+```bash
+python3 name_crosswalk.py --playlist /private/path/main.m3u \
+  --guide /private/path/candidate.xml.gz
+```
+
+The JSON report contains **aggregate counts only**, not channel names, IDs,
+programme listings, URLs, or credentials. It distinguishes single exact-name
+hints, weaker quality-suffix hints, ambiguous matches, and unmatched IDs.
+Matching names **do not confirm the stream's broadcaster, regional feed, or
+schedule rights**; all proposed mappings stay unapproved. Do not automatically
+rewrite the M3U, its `tvg-id` values, or the published EPG based on these
+hints. A future approved replacement should map licensed schedules to Eagle's
+existing IDs so that TiviMate Favorites can remain intact.
+
+### Prepare a private Eagle XMLTV overlay candidate (v1.2 local candidate)
+
+If an Eagle account legitimately exposes a private XMLTV guide, you can
+investigate a supplementary guide **without altering Main, TiviMate or the
+public repository**. Obtain that XMLTV privately through your own account;
+never commit an authenticated EPG URL or its contents to GitHub.
+
+```bash
+python3 native_epg_overlay.py --playlist /private/path/main.m3u \
+  --catalog /private/path/live_streams.json \
+  --native /private/path/eagle_native.xml \
+  --baseline /private/path/epg41.xml.gz --hours 24
+```
+
+By default this prints only a private-safe aggregate report, without writing
+a guide. To create an **unapproved** local XMLTV candidate, add
+`--private-output /private/path/eagle_overlay_candidate.xml`. The output must
+be outside this public repo, must not already exist, and is created with
+owner-only access. Do not add this file to GitHub or use it as an active guide
+until stream identities and schedule reuse rights are independently verified.
+
+The prototype preserves original Main `tvg-id` values, considers only Main
+IDs absent from the baseline, and requires an unambiguous mapping from every
+Main entry sharing that ID to Eagle's catalog `epg_channel_id`. It requires
+at least 95% future coverage over the selected 24-hour default window and
+rejects a source ID if equal-time programme slots have conflicting titles.
+It eliminates exact duplicate programmes, duplicate channel declarations,
+unsupported programme fields and invalid timestamps. **All mappings remain
+unapproved even if the checks pass**; source metadata is not proof of what
+the live stream displays, and subscription access is not redistribution
+permission.
+
+### Classify Eagle source schedule collisions (v1.3 local candidate)
+
+Eagle's native XMLTV may repeat channel declarations and assign different
+programme titles to the **same channel and time slot**. The overlay refuses
+these source IDs entirely. This aggregate-only diagnostic measures whether
+the disagreements are formatting differences, placeholder titles, or
+substantively different programme names:
+
+```bash
+python3 source_conflict_audit.py --playlist /private/path/main.m3u \
+  --catalog /private/path/live_streams.json \
+  --native /private/path/eagle_native.xml \
+  --baseline /private/path/epg41.xml.gz --hours 24
+```
+
+The output contains no programme names, channel IDs, URLs or credentials.
+No classification authorizes automatically picking a winning title: even a
+formatting-only difference must not be used as broadcaster identity proof.
+Continue to omit genuinely conflicting sources from any proposed guide.
+
 ## Publish for free
 
 1. Create a **public** GitHub repository with these files.
