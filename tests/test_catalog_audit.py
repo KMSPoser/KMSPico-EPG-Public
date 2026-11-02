@@ -2,8 +2,8 @@ import json
 import unittest
 
 from catalog_audit import (
-    annotate_nhl_schedule, annotate_tvmaze_discovery, audit, index_catalog, numeric_stream_id,
-    parse_playlist, pilot_review_queue, shared_epg_ids,
+    annotate_nhl_schedule, annotate_tvmaze_discovery, audit, index_catalog, mapping_preflight,
+    numeric_stream_id, parse_playlist, pilot_review_queue, shared_epg_ids,
 )
 
 
@@ -21,7 +21,75 @@ CATALOG = json.dumps([
 ])
 
 
+def approved_tvmaze(channel_id="cw8kpax.us", name="Missoula | CW"):
+    return {"version": 1, "channels": [{
+        "channel_id": channel_id, "channel_name": name,
+        "tvmaze_network_id": 190, "tvmaze_network_name": "CW",
+        "kind": "network", "operator_verified": True,
+    }]}
+
+
 class CatalogAuditTests(unittest.TestCase):
+    def test_preflight_with_no_approved_mapping_is_not_epg_readiness(self):
+        report = mapping_preflight(parse_playlist(M3U), index_catalog(CATALOG),
+                                   {"version": 1, "channels": []})
+        self.assertEqual(report["checked_mappings"], 0)
+        self.assertTrue(report["structurally_consistent"])
+        self.assertTrue(report["not_a_publication_approval"])
+        self.assertIn("not_live_stream_verification", report["status"])
+
+    def test_preflight_matches_unique_existing_main_id_without_modification(self):
+        entries = parse_playlist(M3U)
+        original = [dict(e) for e in entries]
+        report = mapping_preflight(entries, index_catalog(CATALOG), approved_tvmaze())
+        self.assertEqual(report["checked_mappings"], 1)
+        self.assertTrue(report["structurally_consistent"])
+        self.assertEqual(report["blocking_issues"], [])
+        self.assertEqual(report["warnings"], [])
+        self.assertEqual(entries, original)
+
+    def test_preflight_blocks_shared_existing_main_id_without_rewriting(self):
+        entries = parse_playlist(M3U)
+        entries.append({**entries[0], "name": "Backup", "channel_id": "CW8KPAX.US"})
+        report = mapping_preflight(entries, index_catalog(CATALOG), approved_tvmaze())
+        self.assertFalse(report["structurally_consistent"])
+        self.assertEqual(report["blocking_issues"][0]["code"], "shared_main_epg_id")
+        self.assertEqual(entries[-1]["channel_id"], "CW8KPAX.US")
+
+    def test_preflight_rejects_missing_placeholder_and_case_changed_ids(self):
+        entries = parse_playlist(M3U)
+        records = index_catalog(CATALOG)
+        cases = [
+            ("nowhere.us", "not_in_main"),
+            ("dummy-4956", "placeholder_epg_id"),
+            ("CW8KPAX.US", "exact_id_case_mismatch"),
+        ]
+        for channel_id, error in cases:
+            with self.subTest(channel_id=channel_id):
+                result = mapping_preflight(entries, records, approved_tvmaze(channel_id))
+                self.assertIn(error, [x["code"] for x in result["blocking_issues"]])
+
+    def test_preflight_warns_on_label_and_provider_disagreement(self):
+        entries = parse_playlist(M3U)
+        records = index_catalog(json.dumps([
+            {"stream_id": 278751, "name": "CW", "epg_channel_id": "other.id"}
+        ]))
+        report = mapping_preflight(entries, records,
+                                   approved_tvmaze(name="Custom CW label"))
+        self.assertTrue(report["structurally_consistent"])
+        self.assertEqual([x["code"] for x in report["warnings"]],
+                         ["custom_display_name", "provider_epg_id_differs"])
+
+    def test_preflight_rejects_unverified_mapping_and_never_exposes_stream_url(self):
+        config = approved_tvmaze()
+        config["channels"][0]["operator_verified"] = False
+        with self.assertRaises(ValueError):
+            mapping_preflight(parse_playlist(M3U), index_catalog(CATALOG), config)
+        report = mapping_preflight(parse_playlist(M3U), index_catalog(CATALOG),
+                                   approved_tvmaze())
+        self.assertNotIn("secret-password", json.dumps(report))
+        self.assertNotIn("provider.example", json.dumps(report))
+
     def test_tvmaze_discovery_is_unapproved_even_after_exact_network_match(self):
         report = {"pilot_review_queue": [{"playlist_name": "HGTV", "channel_id": "hgtv.us",
                                            "publishable_as_epg": False}]}
