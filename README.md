@@ -132,6 +132,31 @@ publish. The approved mapping must still be individually confirmed by a
 person watching that channel in TiviMate. The Main playlist and Favorites
 remain untouched.
 
+### Compare free guides without changing Favorites (v0.6)
+
+To decide whether an independently obtained XMLTV feed is a useful *secondary*
+source, download its XMLTV `.xml` or `.xml.gz` file for **private inspection**,
+then run:
+
+```bash
+python3 guide_compatibility.py --playlist /private/path/main.m3u --guide /private/path/candidate.xml.gz
+```
+
+This scans XMLTV channel declarations, comparing them against Main's existing
+IDs. Its read-only JSON report separates **exact** ID matches from
+**case-only candidates**, which must not be assumed to match in TiviMate.
+It excludes placeholder event slots, counts repeated playlist entries, and
+never prints a stream URL or republishes a source guide. The quick scan ends
+at the first programme, assuming the usual XMLTV ordering of channel
+declarations before programmes. It does not assess full schedule quality,
+licensing, or whether a stream actually carries the alleged network.
+
+An EPG file with many channels may still have almost no exact ID matches to
+Main. Never rewrite Main's identifiers solely to satisfy an external guide:
+doing so could disrupt existing EPG assignments and Favorites. Keep the
+original EPG source and verify any new source and individual guide assignment
+in TiviMate before deciding whether to use it.
+
 ## Publish for free
 
 1. Create a **public** GitHub repository with these files.
