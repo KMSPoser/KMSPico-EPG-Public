@@ -350,6 +350,30 @@ reduce the candidate channel count; it never approves an EPG, publishes source
 programme data or changes a TiviMate playlist or Favorites. Source schedules,
 stream identity, and rights must still be verified separately before use.
 
+### Audit Eagle's usable schedule horizon (v1.5 local candidate)
+
+The native guide can look nearly complete over a short interval while becoming
+unusable for a two-day replacement. Use a **fixed UTC reference instant** to
+measure the same strict overlay policy at 6, 12, 18, 24, 36 and 48 hours:
+
+```bash
+python3 schedule_horizon_audit.py --playlist /private/path/main.m3u \
+  --catalog /private/path/live_streams.json \
+  --native /private/path/eagle_native.xml \
+  --baseline /private/path/epg41.xml.gz \
+  --as-of 2026-11-02T20:00:00Z
+```
+
+Omit `--as-of` to use the current UTC time. The report includes only aggregate
+candidate counts and rejection categories, never channel IDs, titles, source
+programmes, stream URLs or credentials. Source snapshots and private results
+must not be committed to GitHub. A falling candidate count over longer
+windows indicates that schedule coverage or consistency becomes inadequate;
+it is **not** a reason to relax the 95% threshold or fabricate missing shows.
+For reliable auto-updating coverage, compare newly acquired native guide
+snapshots over time and confirm their permitted use and actual stream identity.
+This diagnostic never writes a guide, touches playlists, or approves EPG use.
+
 ## Publish for free
 
 1. Create a **public** GitHub repository with these files.
