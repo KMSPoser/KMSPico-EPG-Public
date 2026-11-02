@@ -89,7 +89,7 @@ game**. All candidate entries remain `publishable_as_epg: false` until the
 actual stream and programme can be verified separately. Never commit the
 private input files or candidate output to this public repository.
 
-### Safe pilot review and TVmaze discovery (v0.4 candidate)
+### Safe pilot review and TVmaze discovery (v0.4)
 
 The private audit also reports how many existing, real `tvg-id` values are
 shared by multiple playlist channels. These may be intentional backups;
@@ -113,6 +113,24 @@ Only after a person watches the actual TiviMate channel, confirms the
 broadcaster, and checks the proposed network identity may they explicitly
 approve that *specific* mapping in `config/tvmaze_channels.json`. Shared
 guide IDs and sports event slots are excluded from this easy-start queue.
+
+### Private mapping preflight (v0.5)
+
+Before approving or publishing any TVmaze mapping, cross-check its exact
+`tvg-id` against your *current* private Main playlist:
+
+```bash
+python3 catalog_audit.py --playlist /private/path/main.m3u --catalog /private/path/live_streams.json --tvmaze-mapping-preflight config/tvmaze_channels.json
+```
+
+The `tvmaze_mapping_preflight` portion of the local JSON report **blocks**
+missing, shared, placeholder, or case-changed IDs. It **warns**, but does not
+rewrite IDs, when channel display names or the provider's EPG ID disagree.
+This check never opens a stream and cannot prove that it carries the claimed
+broadcaster. A structurally consistent mapping is **not** an approval to
+publish. The approved mapping must still be individually confirmed by a
+person watching that channel in TiviMate. The Main playlist and Favorites
+remain untouched.
 
 ## Publish for free
 

@@ -17,7 +17,7 @@ import re
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
-from tvmaze_source import fetch_us_schedule
+from tvmaze_source import channel_mappings, fetch_us_schedule
 
 
 ATTRIBUTE_RE = re.compile(r"([\w-]+)\s*=\s*([\"'])(.*?)\2")
@@ -150,6 +150,56 @@ def pilot_review_queue(playlist: list[dict], catalog: dict[str, dict]) -> list[d
             "publishable_as_epg": False,
         })
     return result
+
+
+def mapping_preflight(playlist: list[dict], catalog: dict[str, dict], config: dict) -> dict:
+    """Check approved TVmaze IDs against private Main *without* editing either.
+
+    This is a local structural check, NOT proof of which broadcaster a stream
+    carries. It must never automatically set ``operator_verified`` or cause
+    a mapping to be published. Channel IDs and names may be user-customized,
+    so provider disagreements are warnings rather than automatic rewrites.
+    """
+    mappings = channel_mappings(config)
+    by_id: dict[str, list[dict]] = {}
+    for entry in playlist:
+        by_id.setdefault(entry["channel_id"].casefold(), []).append(entry)
+
+    blockers = []
+    warnings = []
+    for item in mappings:
+        channel_id = item["channel_id"]
+        key = channel_id.casefold()
+        matches = by_id.get(key, [])
+        if not matches:
+            blockers.append({"channel_id": channel_id, "code": "not_in_main"})
+            continue
+        if len(matches) != 1:
+            blockers.append({"channel_id": channel_id, "code": "shared_main_epg_id",
+                             "matching_channels": len(matches)})
+            continue
+        if key.startswith("dummy-"):
+            blockers.append({"channel_id": channel_id, "code": "placeholder_epg_id"})
+            continue
+        entry = matches[0]
+        if channel_id != entry["channel_id"]:
+            blockers.append({"channel_id": channel_id, "code": "exact_id_case_mismatch"})
+        if item["channel_name"] != entry["name"]:
+            warnings.append({"channel_id": channel_id, "code": "custom_display_name"})
+        provider = catalog.get(entry["stream_id"])
+        if provider is None:
+            warnings.append({"channel_id": channel_id, "code": "no_provider_stream_match"})
+        elif provider["epg_id"].casefold() != key:
+            warnings.append({"channel_id": channel_id, "code": "provider_epg_id_differs"})
+
+    return {
+        "status": "private_structure_check_not_live_stream_verification",
+        "checked_mappings": len(mappings),
+        "blocking_issues": blockers,
+        "warnings": warnings,
+        "structurally_consistent": not blockers,
+        "not_a_publication_approval": True,
+    }
 
 
 def annotate_tvmaze_discovery(report: dict, daily_schedules: list[list[dict]]) -> dict:
@@ -350,12 +400,17 @@ def main() -> None:
     parser.add_argument("--nhl-day", help="Eastern calendar date YYYY-MM-DD for schedule matching")
     parser.add_argument("--tvmaze-discovery-days", type=int, default=0,
                         help="Optional 1-7 day public TVmaze schedule search; never uploads private data")
+    parser.add_argument("--tvmaze-mapping-preflight", type=Path,
+                        help="Optional local approved TVmaze map to check against Main, without edits")
     args = parser.parse_args()
     if not 0 <= args.tvmaze_discovery_days <= 7:
         parser.error("--tvmaze-discovery-days must be between 0 and 7")
     entries = parse_playlist(args.playlist.read_text(encoding="utf-8-sig", errors="replace"))
     records = index_catalog(args.catalog.read_text(encoding="utf-8"))
     report = audit(entries, records)
+    if args.tvmaze_mapping_preflight is not None:
+        mapping_config = json.loads(args.tvmaze_mapping_preflight.read_text(encoding="utf-8"))
+        report["tvmaze_mapping_preflight"] = mapping_preflight(entries, records, mapping_config)
     if args.nhl_schedule is not None:
         if not args.nhl_day:
             parser.error("--nhl-day is required when --nhl-schedule is supplied")
