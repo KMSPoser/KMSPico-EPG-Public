@@ -374,7 +374,7 @@ For reliable auto-updating coverage, compare newly acquired native guide
 snapshots over time and confirm their permitted use and actual stream identity.
 This diagnostic never writes a guide, touches playlists, or approves EPG use.
 
-### Compare successive private Eagle guide snapshots (v1.6 local candidate)
+### Compare successive private Eagle guide snapshots (v1.6)
 
 After taking a new Eagle XMLTV snapshot through an authorized account, compare
 it with the previous **private** snapshot at the **same fixed UTC instant**:
@@ -396,6 +396,21 @@ count can indicate replenishment, but **does not** prove that the provider's
 refresh cadence is reliable, that the programmes are correct, or that reuse is
 permitted. Do not publish either source snapshot or change `epg41.xml.gz` or
 TiviMate Favorites based on this diagnostic alone.
+
+### Reject incomplete or malformed private XMLTV (v1.7)
+
+An HTTP `200`, plausible XML `Content-Type`, and a valid opening `<tv>` tag
+do **not** guarantee a complete XMLTV guide. A provider response or local
+download can end before the closing `</tv>` tag, leaving a partial snapshot.
+Privately downloaded files should pass a full XML parse and stored-byte-count
+check before being treated as valid observations. Keep any failed download
+outside this public repository.
+
+The refresh comparison command now fails closed with a sanitized error if
+either private XMLTV input is malformed or truncated. It does not print the
+private file path, source titles, credentials, or a raw Python traceback.
+Do not infer that a successful transfer proves current schedules, stream
+identity, or redistribution permission; all previous publication gates remain.
 
 ## Publish for free
 

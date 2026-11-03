@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 import filecmp
 import json
 from pathlib import Path
+from xml.etree.ElementTree import ParseError
 
 from catalog_audit import index_catalog, parse_playlist
 from schedule_horizon_audit import DEFAULT_HOURS, audit_horizons, parse_as_of
@@ -98,7 +99,7 @@ def main() -> None:
             playlist, catalog, baseline=args.baseline, older=args.old_native,
             newer=args.fresh_native, as_of=reference,
         )
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, ParseError, EOFError) as exc:
         # Do not include OS exception text: it can disclose private file paths.
         parser.error(type(exc).__name__ + ": invalid private input or snapshots")
     print(json.dumps(report, indent=2))
