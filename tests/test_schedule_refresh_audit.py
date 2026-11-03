@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -84,6 +85,36 @@ class ScheduleRefreshAuditTest(unittest.TestCase):
             )
             self.assertTrue(report["snapshots_binary_identical"])
             self.assertEqual(report["window_results"][0]["candidate_channel_change"], 0)
+
+    def test_malformed_guide_reports_sanitized_error_not_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            _, _, baseline, older, newer = self._fixtures(folder)
+            newer.write_text('<tv><channel id="private-id"></channel>', encoding="utf-8")
+            playlist = folder / "secret_playlist.m3u"
+            playlist.write_text(
+                '#EXTM3U\n#EXTINF:-1 tvg-id="eagle.one",One\n'
+                'https://example.invalid/live/username/password/1.m3u8\n',
+                encoding="utf-8",
+            )
+            catalog = folder / "secret_catalog.json"
+            catalog.write_text(
+                '[{"stream_id": 1, "epg_channel_id": "first.src"}]',
+                encoding="utf-8",
+            )
+            process = subprocess.run(
+                [sys.executable, str(Path(__file__).resolve().parents[1]
+                                     / "schedule_refresh_audit.py"),
+                 "--playlist", str(playlist), "--catalog", str(catalog),
+                 "--baseline", str(baseline), "--old-native", str(older),
+                 "--fresh-native", str(newer), "--as-of", NOW.isoformat()],
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(process.returncode, 2)
+            self.assertIn("ParseError: invalid private input", process.stderr)
+            self.assertNotIn("Traceback", process.stderr)
+            for private_detail in (str(tmp), "username", "password", "private-id"):
+                self.assertNotIn(private_detail, process.stdout + process.stderr)
 
 
 if __name__ == "__main__":
