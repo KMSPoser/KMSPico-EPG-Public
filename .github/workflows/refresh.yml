@@ -21,6 +21,8 @@ jobs:
         run: python -m unittest discover -s tests -q
       - name: Build approved supplement
         run: python epg_public.py
+      - name: Audit XMLTV before publication
+        run: python publication_gate.py
       - name: Commit refreshed feed
         run: |
           git config user.name 'github-actions[bot]'
